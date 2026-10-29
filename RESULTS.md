@@ -17,12 +17,39 @@
 | A5 | Soak | 2 | 0.99 | 351.35 ms | 378.96 ms | 0.00% | 100.00% (880/880) |
 
 ## Part B
-1.
-2.
-3.
-4.
-5.
-6.
-7.
-8.
-9.
+
+1. The results table for Steps A1 to A5 is in the "Part A results" section above.
+
+2. In Step 0.2, one iteration is one request (about 0.25 s) plus `sleep(1)`, so it takes about 1.28 s. One virtual user therefore sends about 1 / 1.28 ≈ 0.78 requests per second, and 5 users send about 3.9 requests per second. The measured rate was 3.86 req/s. It stays below 5 because each user spends most of every iteration sleeping (think time) and waiting for the response, instead of sending requests back to back.
+
+3. No, the response time did not grow from the average-load test to the stress test. With 3 users (A2) the p(95) was 368.16 ms and the max was 474.23 ms. With 5 users (A3) the p(95) was 353.15 ms and the max was 379.44 ms. The small differences are most likely normal network and server variation, not an effect of load. In terms of the operational envelope, both 3 and 5 users are far inside the range where QuickPizza answers quickly, so we have not reached the edge of the envelope. Finding where the system starts to slow down would need a breakpoint test, which we must not run against a site we do not own. The request rate did rise from 1.30 to 2.18 req/s, roughly in proportion to the number of users.
+
+4. In the spike test (A4), the slowest request of the whole run was 393.17 ms, and the overall p(95) was 371.25 ms, almost the same as the average-load test (368.16 ms). In the report, when the users jumped from 1 to 5 at about 30 to 35 s, the response time to about 381 ms. It returned to its earlier level at about 0.5 s. So QuickPizza handled a sudden jump from 1 to 5 users without any visible slowdown or errors (0.00% failed).
+
+5. In the soak test (A5), the error rate stayed at 0.00% over 660 requests and all 880 checks passed. In the report, the response time in the first minutes was about 268 ms and in the last minutes about 294 ms. Over 11 minutes the max was only 378.96 ms. A soak test of several hours could reveal a memory leak, where the server slowly uses more and more memory until it becomes slow or crashes. It could also reveal resources that are never released, such as database connections or file handles, which run out after a long time.
+
+6. An average hides the slowest requests, because many fast requests pull it down. The p(95) is the time that 95% of requests beat, so it shows what the slowest 1 in 20 users experience. Requirements and thresholds therefore use percentiles, so that a few slow users are not hidden by many fast ones.
+
+7. Two reasons why the same tests against a system in a lab could give different numbers:
+   - Network: our requests travel over the internet from Thailand to a remote server, so the measured time includes network latency and its random variation. A lab system is usually on a local network, so its response times would be lower and more stable.
+   - Hardware and other users: QuickPizza is shared by learners around the world, and we do not know its hardware or how much other traffic it handles at the same time. A lab system has known hardware and no outside load, so the results are easier to repeat. The numbers could be better or worse, depending on the system.
+
+8. A stress, spike or breakpoint test with hundreds of users can slow down or crash a site, and this would affect the real users of a site we do not own. In practice it can look like a denial-of-service attack. Without written permission it may also break the terms of use or the law, and the owner would pay for the extra resources. Tests like this are only done on our own system or with written permission.
+
+9. App: a chat app that I use every day.
+   - Vague requirement: "Sending a message should be fast and should rarely fail."
+   - Testable requirement: With 5 users sending messages at the same time for 1 minute, the send-message API answers 95% of requests within 500 ms and 99% within 1 second, and fewer than 1% of requests fail.
+   - K6 thresholds:
+
+   ```js
+   export const options = {
+     vus: 5,
+     duration: '1m',
+     thresholds: {
+       http_req_duration: ['p(95)<500', 'p(99)<1000'],
+       http_req_failed: ['rate<0.01'],
+     },
+   };
+   ```
+
+   The numbers 500 ms and 1 second are example targets that I chose, not measured values. I did not run this test, because I do not own the app.
